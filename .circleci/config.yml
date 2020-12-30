@@ -1,7 +1,7 @@
 version: 2.1
 
 commands:
-  destroy-environment:
+  destroy_environment:
     description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
     parameters:
       # Add parameter here   
@@ -12,7 +12,7 @@ commands:
           command: |
             aws cloudformation delete-stack --stack-name prod-${CIRCLE_WORKFLOW_ID}
 
-  revert-migrations:
+  revert_migrations:
     description: Revert the last migration if successfully run in the current workflow.
     parameters:
       # Add parameter here     
@@ -32,7 +32,7 @@ commands:
             fi
             
 jobs:
-  build-frontend:
+  build_frontend:
     docker:
       - image: circleci/node:13.8.0
     steps:
@@ -43,7 +43,7 @@ jobs:
             cd frontend
             npm i
             npm run build
-  build-backend:
+  build_backend:
     docker:
       - image: circleci/node:13.8.0
     steps:
@@ -54,7 +54,7 @@ jobs:
             cd backend
             npm i
             npm run build
-  test-frontend:
+  test_frontend:
     docker:
       # Docker image here
     steps:
@@ -62,7 +62,7 @@ jobs:
       # Restore from cache
       # Your job code here
                 
-  test-backend:
+  test_backend:
     docker:
       # Docker image here
     steps:
@@ -70,7 +70,7 @@ jobs:
       # Restore from cache
       # Your job code here
             
-  scan-frontend:
+  scan_frontend:
     docker:
       # Docker image here
     steps:
@@ -78,7 +78,7 @@ jobs:
       # Restore from cache
       # Your job code here
 
-  scan-backend:
+  scan_backend:
     docker:
       # Docker image here
     steps:
@@ -86,7 +86,7 @@ jobs:
       # Restore from cache
       # Your job code here
 
-  deploy-infrastructure:
+  deploy_infrastructure:
     docker:
       # Docker image here that supports AWS CLI
     steps:
@@ -120,7 +120,7 @@ jobs:
             - project/.circleci/ansible/inventory.txt
       # Here's where you will add some code to rollback on failure      
 
-  configure-infrastructure:
+  configure_infrastructure:
     docker:
       # Docker image here that supports Ansible
     steps:
@@ -139,7 +139,7 @@ jobs:
             exit 1
       # Here's where you will add some code to rollback on failure      
 
-  run-migrations:
+  run_migrations:
     docker:
       # Docker image here that supports NodeJS
     steps:
@@ -156,7 +156,7 @@ jobs:
             exit 1
      # Here's where you will add some code to rollback on failure      
 
-  deploy-frontend:
+  deploy_frontend:
     docker:
       # Docker image here that supports AWS CLI
     steps:
@@ -177,7 +177,7 @@ jobs:
             # your code here
       # Here's where you will add some code to rollback on failure      
                     
-  deploy-backend:
+  deploy_backend:
     docker:
       # Docker image here that supports Ansible
     steps:
@@ -194,7 +194,7 @@ jobs:
             # your code here
       # Here's where you will add some code to rollback on failure  
 
-  smoke-test:
+  smoke_test:
     docker:
       # Lightweight Docker image 
     steps:
@@ -217,7 +217,7 @@ jobs:
             # your code here
       # Here's where you will add some code to rollback on failure  
 
-  cloudfront-update:
+  cloudfront_update:
     docker:
       # Docker image here that supports AWS CLI
     steps:
@@ -255,32 +255,32 @@ cleanup:
 workflows:
   default:
     jobs:
-      - build-frontend
-      - build-backend
-      - test-frontend:
-          requires: [build-frontend]
-      - test-backend:
-          requires: [build-backend]
-      - scan-backend:
-          requires: [build-backend]
-      - scan-frontend:
-          requires: [build-frontend]
-      - deploy-infrastructure:
-          requires: [test-frontend, test-backend, scan-frontend, scan-backend]
+      - build_frontend
+      - build_backend
+      - test_frontend:
+          requires: [build_frontend]
+      - test_backend:
+          requires: [build_backend]
+      - scan_backend:
+          requires: [build_backend]
+      - scan_frontend:
+          requires: [build_frontend]
+      - deploy_infrastructure:
+          requires: [test_frontend, test_backend, scan_frontend, scan_backend]
           filters:
             branches:
-              only: [test-feature-branch]
-      - configure-infrastructure:
-          requires: [deploy-infrastructure]
-      - run-migrations:
-          requires: [configure-infrastructure]
-      - deploy-frontend:
-          requires: [run-migrations]
-      - deploy-backend:
-          requires: [run-migrations]
-      - smoke-test:
-          requires: [deploy-backend, deploy-frontend]
-      - cloudfront-update:
-          requires: [smoke-test]
+              only: [test_feature_branch]
+      - configure_infrastructure:
+          requires: [deploy_infrastructure]
+      - run_migrations:
+          requires: [configure_infrastructure]
+      - deploy_frontend:
+          requires: [run_migrations]
+      - deploy_backend:
+          requires: [run_migrations]
+      - smoke_test:
+          requires: [deploy_backend, deploy_frontend]
+      - cloudfront_update:
+          requires: [smoke_test]
       - cleanup:
-          requires: [cloudfront-update]
+          requires: [cloudfront_update]
