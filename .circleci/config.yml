@@ -62,7 +62,7 @@ jobs:
     steps:
       - checkout
       - run:  
-          name: Build Frontend Code
+          name: Run Frontend Tests
           command: |
             cd backend
             npm i
@@ -74,7 +74,7 @@ jobs:
     steps:
       - checkout
       - run:  
-          name: Build Backend Code
+          name: Run Backend Tests
           command: |
             cd backend
             npm i
