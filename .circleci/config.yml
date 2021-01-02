@@ -10,7 +10,9 @@ commands:
           name: Destroy environments
           when: on_fail
           command: |
-            aws cloudformation delete-stack --stack-name prod-${CIRCLE_WORKFLOW_ID}
+            aws s3 rm "s3://udapeople-${CIRCLE_WORKFLOW_ID}" --recursive
+            aws cloudformation delete-stack --stack-name "udapeople-frontend-${CIRCLE_WORKFLOW_ID}"
+            aws cloudformation delete-stack --stack-name "udapeople-backend-${CIRCLE_WORKFLOW_ID}"
 
   revert-migrations:
     description: Revert the last migration if successfully run in the current workflow.
@@ -103,6 +105,48 @@ jobs:
             cd backend
             npm i
             npm audit fix --audit-level=critical --force
+  deploy-infrastructure:
+    docker:
+      -  image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Ensure back-end infrastructure exists
+          command: |
+            aws cloudformation deploy \
+              --template-file .circleci/files/backend.yml \
+              --tags project=udapeople \
+              --stack-name "udapeople-backend-${CIRCLE_WORKFLOW_ID}" \
+              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID}"  
+            URLS=$(aws ec2 describe-instances --region us-west-2 --query "Reservations[*].Instances[*].PublicIpAddress"  --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID}"  --output text)
+            echo "backendec2url=$URLS"
+            echo "${CIRCLE_WORKFLOW_ID}"            
+            curl -H "Content-Type: text/plain" -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request PUT --data "$backendec2url" https://api.memstash.io/values/backendec2_${CIRCLE_WORKFLOW_ID}
+
+      - run:
+          name: Ensure front-end infrastructure exist
+          command: |
+            aws cloudformation deploy \
+              --template-file .circleci/files/frontend.yml \
+              --tags project=udaPeople\
+              --stack-name "udapeople-frontend-${CIRCLE_WORKFLOW_ID}" \
+              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID}"  
+            ARN=$(aws s3 ls | grep udapeople)
+            echo "ARN=$ARN"
+            curl -H "Content-Type: text/plain" -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request PUT --data "$ARN" https://api.memstash.io/values/arn_${CIRCLE_WORKFLOW_ID}
+      - run:
+          name: Add back-end ip to ansible inventory
+          command: |
+            cd .circleci/ansible
+            echo "[web]" >> inventory.txt
+            URLS=$(curl -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request GET https://api.memstash.io/values/backendec2_${CIRCLE_WORKFLOW_ID}
+            echo "$URLS" >> inventory.txt
+            cat inventory.txt
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - project/.circleci/ansible/inventory.txt
+      # Here's where you will add some code to rollback on failure
 
 cleanup:
     docker:
@@ -134,6 +178,8 @@ workflows:
       - test-backend:
           requires: [build-backend]
       - scan-backend:
-          requires: [build-backend]
+          requires: [test-backend]
       - scan-frontend:
-          requires: [build-frontend]
+          requires: [test-frontend]
+      - deploy-infrastructure:
+          requires: [scan-frontend, scan-backend]
