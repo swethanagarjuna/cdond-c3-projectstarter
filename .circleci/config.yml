@@ -10,9 +10,9 @@ commands:
           name: Destroy environments
           when: on_fail
           command: |
-            aws s3 rm "s3://udapeople-${CIRCLE_WORKFLOW_ID}" --recursive
             aws cloudformation delete-stack --stack-name "udapeople-frontend-${CIRCLE_WORKFLOW_ID}"
             aws cloudformation delete-stack --stack-name "udapeople-backend-${CIRCLE_WORKFLOW_ID}"
+            aws s3 rm "s3://udapeople-${CIRCLE_WORKFLOW_ID}" --recursive            
 
   revert-migration:
     description: Revert the last migration if successfully run in the current workflow.
@@ -157,11 +157,12 @@ jobs:
           fingerprints:
             - 2d:e3:43:7c:dc:0e:c9:ed:1f:21:34:0e:d8:5a:c9:55
       - attach_workspace:
-          at: ~/project/.circleci/ansible/inventory.txt
+          at: project/.circleci/ansible/inventory.txt
       - run:
           name: Install dependencies
           command: |
-            apk add --update ansible
+            apk add --update tar gzip ansible nodejs npm curl
+            pip install awscli
       - run:
           name: verify ansible hosts
           command: |
@@ -180,7 +181,7 @@ jobs:
             echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> "backend/.env"
             echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> "backend/.env"
             cd .circleci/ansible
-            ansible-playbook -i inventory.txt main.yml
+            ansible-playbook -i inventory.txt configure-server.yml
       - destroy-environment 
   run-migrations:
     docker:
