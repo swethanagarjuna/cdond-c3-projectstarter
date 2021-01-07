@@ -203,7 +203,6 @@ jobs:
           #command: |
             #curl -H "Content-Type: text/plain" -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request PUT --data "true" https://api.memstash.io/values/${CIRCLE_WORKFLOW_ID:0:7}
       - destroy-environment
-          workflow_id: ${CIRCLE_WORKFLOW_ID:0:7}
      # Here's where you will add some code to rollback on failure 
 
   deploy-frontend:
@@ -232,7 +231,6 @@ jobs:
             cd dist
             aws s3 sync . s3://udapeople-"${CIRCLE_WORKFLOW_ID}" --delete
       - destroy-environment
-          workflow_id: ${CIRCLE_WORKFLOW_ID:0:7}
       - revert-migration      
 
       # Here's where you will add some code to rollback on failure      
@@ -275,7 +273,6 @@ jobs:
             cd ../.circleci/ansible
             ansible-playbook -i inventory.txt eploy-backend.yml
       - destroy-environment
-          workflow_id: ${CIRCLE_WORKFLOW_ID:0:7}
       - revert-migration
 
       # Here's where you will add some code to rollback on failure 
