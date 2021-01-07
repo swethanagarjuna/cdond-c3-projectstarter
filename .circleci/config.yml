@@ -189,15 +189,24 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Install dependencies
+          command: |
+            apk add --update tar gzip npm curl
+            pip install awscli
+      - run:
           name: Run DB Migration
           command: |
             cd backend
             npm i
-            SUCCESS=$(npm run migrations)
+            npm run migrations
+            SUCCESS=$?
             if (( $SUCCESS == 0 ));   
             then
             echo success
             curl -H "Content-Type: text/plain" -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request PUT --data "true" https://api.memstash.io/values/migration-${CIRCLE_WORKFLOW_ID}
+            else
+            npm audit fix --force
+            fi             
               
       #- run:
           #name: Send migration results to memstash
