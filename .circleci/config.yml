@@ -24,13 +24,12 @@ commands:
           # Add when this will run
           command: |
             # Curl command here to see if there was a successful migration associated with the workflow id, store result in SUCCESS variable
-            SUCCESS = 1
+            SUCCESS = $(curl -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request GET https://api.memstash.io/values/migration-${CIRCLE_WORKFLOW_ID})
             if(( $SUCCESS==1 )); 
             then
-            #  cd ~/project/backend
-            #  npm install
-            #  Add revert code here. You can find this in the Getting Started section.
-              exit 1
+            cd ~/project/backend
+            npm install
+            npm run migration:revert
             fi
             
 jobs:
@@ -110,6 +109,8 @@ jobs:
       -  image: amazon/aws-cli
     steps:
       - checkout
+      - run: yum install -y tar
+      - run: yum install -y gzip
       - run:
           name: Ensure back-end infrastructure exists
           command: |
@@ -119,9 +120,9 @@ jobs:
               --stack-name "udapeople-backend-${CIRCLE_WORKFLOW_ID}" \
               --parameter-overrides ID="${CIRCLE_WORKFLOW_ID}"  
             URLS=$(aws ec2 describe-instances --region us-west-2 --query "Reservations[*].Instances[*].PublicIpAddress"  --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID}"  --output text)
-            echo "backendec2url=$URLS"
+            echo "$URLS"
             echo "${CIRCLE_WORKFLOW_ID}"            
-            curl -H "Content-Type: text/plain" -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request PUT --data "$backendec2url" https://api.memstash.io/values/backendec2-${CIRCLE_WORKFLOW_ID}
+            curl -H "Content-Type: text/plain" -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request PUT --data "$URLS" https://api.memstash.io/values/backendec2-${CIRCLE_WORKFLOW_ID}
 
       - run:
           name: Ensure front-end infrastructure exist
@@ -147,6 +148,137 @@ jobs:
           paths:
             - project/.circleci/ansible/inventory.txt
       # Here's where you will add some code to rollback on failure
+  configure-infrastructure:
+    docker:
+      -  image: python:3.7-alpine3.11
+    steps:
+      - checkout
+      - add_ssh_keys:
+          fingerprints:
+            - 2d:e3:43:7c:dc:0e:c9:ed:1f:21:34:0e:d8:5a:c9:55
+      - attach_workspace:
+          at: ~/project/.circleci/ansible/inventory.txt
+      - run:
+          name: Install dependencies
+          command: |
+            apk add --update ansible
+      - run:
+          name: verify ansible hosts
+          command: |
+            ansible all --list-hosts
+      - run:
+          name: Configure server
+          command: |
+            echo ENVIROMENT=production > "backend/.env"
+            echo TYPEORM_CONNECTION=postgres >> "backend/.env"
+            echo TYPEORM_MIGRATIONS_DIR=./src/migrations >> "backend/.env"
+            echo TYPEORM_ENTITIES=./src/modules/domain/**/*.entity.ts >> "backend/.env"
+            echo TYPEORM_MIGRATIONS=./src/migrations/*.ts >> "backend/.env"
+            echo TYPEORM_HOST=$TYPEORM_HOST >> "backend/.env"
+            echo TYPEORM_PORT=$TYPEORM_PORT >> "backend/.env"
+            echo TYPEORM_USERNAME=$TYPEORM_USERNAME >> "backend/.env"
+            echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> "backend/.env"
+            echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> "backend/.env"
+            cd .circleci/ansible
+            ansible-playbook -i inventory.txt main.yml
+      - destroy-environment 
+  run-migrations:
+    docker:
+      - image: circleci/node
+    steps:
+      - checkout
+      - run:
+          name: Run DB Migration
+          command: |
+            cd backend
+            npm i
+            SUCCESS=$(npm run migrations)
+            if (( $SUCCESS == 0 ));   
+            then
+            echo success
+            curl -H "Content-Type: text/plain" -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request PUT --data "true" https://api.memstash.io/values/migration-${CIRCLE_WORKFLOW_ID}
+              
+      #- run:
+          #name: Send migration results to memstash
+          #command: |
+            #curl -H "Content-Type: text/plain" -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request PUT --data "true" https://api.memstash.io/values/${CIRCLE_WORKFLOW_ID:0:7}
+      - destroy-environment
+          workflow_id: ${CIRCLE_WORKFLOW_ID:0:7}
+     # Here's where you will add some code to rollback on failure 
+
+  deploy-frontend:
+    docker:
+      -  image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
+            yum -y install nodejs
+            yum install -y tar gzip
+      - run:
+          name: Get backend url
+          command: |
+            # your code here
+            export API_URL=https://$(curl -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request GET https://api.memstash.io/values/backendec2-${CIRCLE_WORKFLOW_ID})
+            echo "${API_URL}"
+      - run:
+          name: Deploy frontend objects
+          command: |
+            cd frontend
+            npm i
+            npm run build
+            cd dist
+            aws s3 sync . s3://udapeople-"${CIRCLE_WORKFLOW_ID}" --delete
+      - destroy-environment
+          workflow_id: ${CIRCLE_WORKFLOW_ID:0:7}
+      - revert-migration      
+
+      # Here's where you will add some code to rollback on failure      
+                    
+  deploy-backend:
+    docker:
+      -  image: python:3.7-alpine3.11
+    steps:
+      - checkout
+      - add_ssh_keys:
+          fingerprints:
+            - 2d:e3:43:7c:dc:0e:c9:ed:1f:21:34:0e:d8:5a:c9:55
+      - attach_workspace:
+          at: ~/project/.circleci/ansible/inventory.txt
+      - run:
+          name: Install dependencies
+          command: |
+            apk add --update tar gzip ansible nodejs npm
+            pip install awscli
+      - run:
+          name: Deploy backend
+          command: |
+            cd backend
+            npm i
+            npm run build
+            echo "List of contents before deleting: "
+            ls -a
+            echo "----------------------------------------"
+
+            rm -rf node_modules 
+            rm -rf dist
+            rm -rf test
+            rm README.md 
+
+            echo "List of files and dirs that will be sent to ansible: "
+            ls -a
+            echo "----------------------------------------"
+
+            mkdir -p ../.circleci/ansible/roles/deploy/files
+            cd ../.circleci/ansible
+            ansible-playbook -i inventory.txt eploy-backend.yml
+      - destroy-environment
+          workflow_id: ${CIRCLE_WORKFLOW_ID:0:7}
+      - revert-migration
+
+      # Here's where you will add some code to rollback on failure 
 
 cleanup:
     docker:
@@ -166,8 +298,6 @@ cleanup:
             then
               # your code here
             fi
-            
-
 workflows:
   default:
     jobs:
@@ -183,3 +313,11 @@ workflows:
           requires: [test-frontend]
       - deploy-infrastructure:
           requires: [scan-frontend, scan-backend]
+      - configure-infrastructure:
+          requires: [deploy-infrastructure]
+      - run-migrations:
+          requires: [configure-infrastructure]
+      - deploy-frontend:
+          requires: [run-migrations]
+      - deploy-backend:
+          requires: [run-migrations]
