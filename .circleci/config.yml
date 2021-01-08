@@ -24,12 +24,12 @@ commands:
           # Add when this will run
           command: |
             # Curl command here to see if there was a successful migration associated with the workflow id, store result in SUCCESS variable
-            SUCCESS = $(curl -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request GET https://api.memstash.io/values/migration-${CIRCLE_WORKFLOW_ID})
-            if(( $SUCCESS==1 )); 
+            success_migration = $(curl -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request GET https://api.memstash.io/values/migration-${CIRCLE_WORKFLOW_ID})
+            if((${success_migration}==1)); 
             then
-            cd ~/project/backend
-            npm install
-            npm run migration:revert
+              cd ~/project/backend
+              npm install
+              npm run migrations:revert
             fi
             
 jobs:
@@ -218,21 +218,22 @@ jobs:
 
   deploy-frontend:
     docker:
-      -  image: amazon/aws-cli
+      -  image: python:3.7-alpine3.11
     steps:
       - checkout
       - run:
           name: Install dependencies
           command: |
-            curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
-            yum -y install nodejs
-            yum install -y tar gzip
+            apk add --update tar gzip ansible nodejs npm curl
+            pip install awscli
       - run:
           name: Get backend url
           command: |
             # your code here
-            export API_URL=https://$(curl -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request GET https://api.memstash.io/values/backendec2-${CIRCLE_WORKFLOW_ID})
+            export API_URL=https://$(curl -H "token: 1fc96449-a967-47a5-bfae-2306cfa2f7fe" --request GET https://api.memstash.io/values/backendec2-${CIRCLE_WORKFLOW_ID}):3030
+            echo "API_URL=$API_URL" > frontend/.env
             echo "${API_URL}"
+            
       - run:
           name: Deploy frontend objects
           command: |
@@ -255,7 +256,7 @@ jobs:
           fingerprints:
             - 2d:e3:43:7c:dc:0e:c9:ed:1f:21:34:0e:d8:5a:c9:55
       - attach_workspace:
-          at: ~/project/.circleci/ansible/inventory.txt
+          at: ~/
       - run:
           name: Install dependencies
           command: |
@@ -282,7 +283,7 @@ jobs:
 
             mkdir -p ../.circleci/ansible/roles/deploy/files
             cd ../.circleci/ansible
-            ansible-playbook -i inventory.txt eploy-backend.yml
+            ansible-playbook -i inventory.txt deploy-backend.yml
       - destroy-environment
       - revert-migration
 
